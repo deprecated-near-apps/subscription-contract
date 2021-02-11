@@ -4,6 +4,14 @@ This repo is a companion to this video:
 
 [![Live App Review 9 - Subscription Contract + App (Payments API Part 3)](https://img.youtube.com/vi/SAMFNaB5ca4/0.jpg)](https://youtu.be/SAMFNaB5ca4)
 
+Find out how to use env::block_timestamp() and calculate the remaining portion of a subscription.
+Using NEAR Protocol and time based subscriptions, a client can pull their funds if they feel like they're not getting the service they signed up for.
+The provider can see this and stop delivering the service.
+
+Welcome to the future!
+
+Use Case:
+Want to give Spanish lessons and charge your clients per minute? What happens if you get disconnected half way through? Shouldn't your client be assured they can get their money back if they haven't used all of their subscription?
 
 ## Installation
 
