@@ -1,12 +1,12 @@
 import React from 'react';
 
-export const Wallet = ({ wallet, account }) => {
+export const Wallet = ({ wallet, account, balance }) => {
 
 	if (wallet && wallet.signedIn) {
 		return <>
 			<h3>Wallet Account</h3>
 			<p>Signed In: { account.accountId }</p>
-			<p>Balance: { wallet.balance }</p>
+			<p>Balance: { balance }</p>
 			<button onClick={() => wallet.signOut()}>Sign Out</button>
 		</>;
 	}

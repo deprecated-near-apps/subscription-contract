@@ -9,29 +9,33 @@ use serde::Serialize;
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+const SECOND: u64 = 1_000_000_000;
+const FULL_PERIOD: u8 = 12;
+
 #[near_bindgen]
 
 #[derive(Debug, Serialize, BorshDeserialize, BorshSerialize)]
 pub struct Deposit {
     pub memo: String,
     pub amount: U128,
-    pub paid: bool,
+    pub paid: u8,
+    pub created: u64,
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct PaymentContract {
+pub struct Subscription {
     pub owner_id: AccountId,
     pub deposits: UnorderedMap<AccountId, Vec<Deposit>>,
 }
 
-impl Default for PaymentContract {
+impl Default for Subscription {
     fn default() -> Self {
         panic!("Should be initialized before usage")
     }
 }
 
 #[near_bindgen]
-impl PaymentContract {
+impl Subscription {
     #[init]
     pub fn new(owner_id: AccountId) -> Self {
         assert!(env::is_valid_account_id(owner_id.as_bytes()), "Invalid owner account");
@@ -43,7 +47,7 @@ impl PaymentContract {
     }
 
     #[payable]
-    pub fn deposit(&mut self, memo: String) {
+    pub fn subscribe(&mut self, memo: String) {
         assert!(memo.len() < 64, "memo too long");
         let amount = env::attached_deposit();
         let account_id = env::signer_account_id();
@@ -51,30 +55,36 @@ impl PaymentContract {
         deposits.push(Deposit{
             memo,
             amount: amount.into(),
-            paid: false,
+            paid: 0,
+            created: env::block_timestamp(),
         });
-        self.deposits.insert(&account_id, &deposits);
-    }
-
-    pub fn make_payment(&mut self, deposit_index: usize) {
-        let account_id = env::signer_account_id();
-        let mut deposits = self.deposits.get(&account_id).unwrap_or(vec![]);
-        deposits[deposit_index].paid = true;
         self.deposits.insert(&account_id, &deposits);
     }
 
     pub fn withdraw(&mut self, deposit_index: usize) {
         let account_id = env::signer_account_id();
+        self.ping(deposit_index);
+        let deposits = self.deposits.get(&account_id).unwrap_or(vec![]);
+        let deposit = deposits.get(deposit_index).expect("no deposit");
+
+        assert!(deposit.paid < FULL_PERIOD, "subscription fulfilled");
+        let portions: u128 = u128::from(deposit.amount) / FULL_PERIOD as u128;
+        let unpaid: u128 = FULL_PERIOD as u128 - deposit.paid as u128;
+        Promise::new(account_id).transfer(portions * unpaid);
+    }
+
+    pub fn ping(&mut self, deposit_index: usize) {
+        let account_id = env::signer_account_id();
         let mut deposits = self.deposits.get(&account_id).unwrap_or(vec![]);
-        let deposit = deposits.remove(deposit_index);
-        assert!(deposit.paid == false, "payment was already confirmed");
+        let deposit = deposits.get_mut(deposit_index).expect("no deposit");
+        let ts = env::block_timestamp();
+        deposit.paid = ((ts - deposit.created) / SECOND as u64) as u8;
         self.deposits.insert(&account_id, &deposits);
-        Promise::new(account_id).transfer(deposit.amount.into());
     }
 
     /// view methods
 
-    pub fn get_deposits(&self, account_id: AccountId) -> Vec<Deposit> {
+    pub fn get_subs(&self, account_id: AccountId) -> Vec<Deposit> {
         self.deposits.get(&account_id).unwrap_or(vec![])
     }
 }
@@ -118,72 +128,16 @@ mod tests {
         context.attached_deposit = ntoy(1).into();
         testing_env!(context.clone());
 
-        let mut contract = PaymentContract::new(context.current_account_id.clone());
-        contract.deposit("take my money".to_string());
+        let mut contract = Subscription::new(context.current_account_id.clone());
+        contract.subscribe("take my money".to_string());
 
-        let deposits = contract.get_deposits(context.signer_account_id.clone());
-
-
-        assert_eq!(deposits.get(0).unwrap().memo, "take my money".to_string());
-    }
-
-    #[test]
-    fn make_deposit_and_payment() {
-        let mut context = get_context();
-        context.attached_deposit = ntoy(1).into();
+        context.block_timestamp = 1_000_000_000;
         testing_env!(context.clone());
 
-        let mut contract = PaymentContract::new(context.current_account_id.clone());
-        contract.deposit("take my money".to_string());
-        contract.make_payment(0);
+        let deposits = contract.ping(0);
+        let deposits = contract.get_subs(context.signer_account_id.clone());
 
-        let deposits = contract.get_deposits(context.signer_account_id.clone());
-
-        assert_eq!(deposits[0].paid, true);
+        assert_eq!(deposits.get(0).unwrap().paid, 1);
     }
 
-    #[test]
-    fn make_deposit_and_withdrawal() {
-        let mut context = get_context();
-        context.attached_deposit = ntoy(1).into();
-        testing_env!(context.clone());
-
-        let mut contract = PaymentContract::new(context.current_account_id.clone());
-        contract.deposit("take my money".to_string());
-        contract.withdraw(0);
-
-        let deposits = contract.get_deposits(context.signer_account_id.clone());
-
-        assert_eq!(deposits.len(), 0);
-    }
-
-    // #[test]
-    // #[should_panic(
-    //     expected = r#"Message exists"#
-    // )]
-    // fn panic_create() {
-    //     let mut context = get_context();
-    //     context.signer_account_pk = Base58PublicKey::try_from("ed25519:Eg2jtsiMrprn7zgKKUk79qM1hWhANsFyE6JSX4txLEuy").unwrap().into();
-    //     testing_env!(context.clone());
-    //     let mut contract = Messages::new(context.current_account_id.clone());
-    //     contract.create("hello world!".to_string(), ntoy(10), "alice.testnet".to_string());
-    //     contract.create("hello world!".to_string(), ntoy(10), "alice.testnet".to_string());
-    // }
-    
-    // #[test]
-    // #[should_panic(
-    //     expected = r#"No message"#
-    // )]
-    // fn panic_purchase() {
-    //     let mut context = get_context();
-    //     context.signer_account_pk = Base58PublicKey::try_from("ed25519:Eg2jtsiMrprn7zgKKUk79qM1hWhANsFyE6JSX4txLEuy").unwrap().into();
-    //     testing_env!(context.clone());
-    //     let mut contract = Messages::new(context.current_account_id.clone());
-    //     contract.create("hello world!".to_string(), ntoy(10), "alice.testnet".to_string());
-    //     context.signer_account_pk = vec![4,5,6];
-    //     context.account_balance = ntoy(1000).into();
-    //     context.attached_deposit = ntoy(10).into();
-    //     testing_env!(context.clone());
-    //     contract.purchase(Base58PublicKey::try_from("ed25519:Bg2jtsiMrprn7zgKKUk79qM1hWhANsFyE6JSX4txLEuy").unwrap());
-    // }
 }

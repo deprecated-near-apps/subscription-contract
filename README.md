@@ -1,9 +1,8 @@
-# Live App Review 8 - Payments Contract (Payments API Part 2)
+# Live App Review 9 - Subscription Contract + App (Payments API Part 3)
 
 This repo is a companion to this video:
 
-[![Live App Review 8 - Payments Contract (Payments API Part 2)](https://img.youtube.com/vi/540WO236bhA/0.jpg)](https://youtu.be/540WO236bhA)
-
+[![Live App Review 9 - Subscription Contract + App (Payments API Part 3)](https://img.youtube.com/vi/SAMFNaB5ca4/0.jpg)](https://youtu.be/SAMFNaB5ca4)
 
 
 ## Installation

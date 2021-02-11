@@ -16,6 +16,8 @@ const App = () => {
 		dispatch(onAppMount());
 	};
 	useEffect(onMount, []);
+
+    console.log(wallet)
     
 	if (loading) {
 		return <div className="root">
@@ -25,8 +27,8 @@ const App = () => {
     
 	return (
 		<div className="root">
-			<Contract {...{ near, update, wallet, account }} />
-			<Wallet {...{ wallet, account }} />
+			<Contract {...{ near, update, wallet, account, dispatch }} />
+			<Wallet {...{ wallet, account, balance: wallet && wallet.balance }} />
 		</div>
 	);
 };
